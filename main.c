@@ -9,7 +9,10 @@
 #include <string.h>
 #include <termios.h>
 #include <unistd.h>
+#include <mqueue.h>
+#include <time.h>
 #include "crc16.h"
+#include "xlgyroserver.h"
 
 #define LINEAR_ACCELERATION_RANGE_2         (0.000061)
 #define LINEAR_ACCELERATION_RANGE_4         (0.000122)
@@ -21,7 +24,7 @@
 #define SLIDING_WINDOW_SIZE                 (32)
 #define AVERAGED_BUF_SIZE                   (300)       // ~ 30s
 
-#define DEFAULT_PORTNAME     "/dev/ttyUSB0"
+#define DEFAULT_PORTNAME     "/dev/ttyUSB1"
 
 #define DATA_BUF_SIZE               (1024 * 8)
 #define PACKET_PREAMBULE            (0xAA55)
@@ -37,13 +40,7 @@
 
 #define PACKET_PAYLOAD_LEN(itms)            (sizeof(RAW_DATA_S) * itms * 2)
 
-typedef enum
-{
-    E_X_AXIS = 0,
-    E_Y_AXIS,
-    E_Z_AXIS,
-    E_AXIS_COUNT
-} AXISES;
+#define QUEUE_POLL_SENDER                   ((struct timespec){5, 0})
 
 typedef struct __attribute__((packed, aligned(1))) RAW_DATA_STRUCT
 {
@@ -57,8 +54,6 @@ typedef struct __attribute__((packed, aligned(1))) PACKET_HEADER_STRUCT
     uint16_t samples;
 } PACKET_HEADER_S;
 
-int aa = sizeof(PACKET_HEADER_S);
-
 typedef struct __attribute__((packed, aligned(1))) DATA_PACKET_STRUCT
 {
     PACKET_HEADER_S header;
@@ -68,11 +63,6 @@ typedef struct __attribute__((packed, aligned(1))) DATA_PACKET_STRUCT
         RAW_DATA_S gValue;
     } agBufs[DATA_BUF_SIZE];
 } DATA_PACKET_S;
-
-typedef struct AXIS_DOUBLE_VALUE_STRUCT
-{
-    double axisValue[E_AXIS_COUNT];
-} AXIS_DOUBLE_VALUE_S;
 
 typedef struct RAW_SLIDING_WINDOW_STRUCT
 {
@@ -113,6 +103,8 @@ static DATA_PACKET_S rxPacket = { 0 };
 static RAW_SLIDING_WINDOW_S aSlidingWindow = { 0 };
 static RAW_SLIDING_WINDOW_S gSlidingWindow = { 0 };
 static AVERAGED_BUF_S aAveragedBuf = {0};
+
+static mqd_t xlGyroServerMq;
 
 static void setMin(RAW_SLIDING_WINDOW_S *pWindow, RAW_DATA_S *pRawData)
 {
@@ -293,46 +285,46 @@ static void getTotalAveraged(AVERAGED_BUF_S *pBuf, AXIS_DOUBLE_VALUE_S *pTotal)
     pTotal->axisValue[E_Z_AXIS] = zSum / AVERAGED_BUF_SIZE;
 }
 
-static bool isObstacle()
+static bool isObstacle(XLGYRO_DATA_S *pData)
 {
     bool ret = false;
-    RAW_DATA_S aData = { 0 };
-    RAW_DATA_S aMin = { 0 };
-    RAW_DATA_S aMax = { 0 };
-    AXIS_DOUBLE_VALUE_S accelValue = { 0 };
-    AXIS_DOUBLE_VALUE_S aMinValue = { 0 };
-    AXIS_DOUBLE_VALUE_S aMaxValue = { 0 };
-    AXIS_DOUBLE_VALUE_S gyroValue = { 0 };
-    AXIS_DOUBLE_VALUE_S aTotalAveraged= { 0 };
     double deviation = 0;
 
-    accelRawDataAveraged(&aData);
-    accelCalc(&aData, &accelValue);
-    averagedBufPush(&aAveragedBuf, &accelValue);
-    slidingWindowGetMin(&aSlidingWindow, &aMin);
-    slidingWindowGetMax(&aSlidingWindow, &aMax);
-    accelCalc(&aMin, &aMinValue);
-    accelCalc(&aMax, &aMaxValue);
-    getTotalAveraged(&aAveragedBuf, &aTotalAveraged);
-
-    printf("Acc: [%+.6f]; [%+.6f]; [%+.6f]; \n",
-                accelValue.axisValue[E_X_AXIS],
-                accelValue.axisValue[E_Y_AXIS],
-                accelValue.axisValue[E_Z_AXIS]);
-
-    if (accelValue.axisValue[E_Z_AXIS] > 0.4 || accelValue.axisValue[E_Z_AXIS] < -0.4)
+    if (pData != NULL)
     {
-        ret = true;
-    }
+        if (pData->current.axisValue[E_Z_AXIS] > 0.4 || pData->current.axisValue[E_Z_AXIS] < -0.4)
+        {
+            ret = true;
+        }
 
-    deviation = aTotalAveraged.axisValue[E_Z_AXIS] - accelValue.axisValue[E_Z_AXIS];
-    deviation /= aTotalAveraged.axisValue[E_Z_AXIS];
-    if (deviation > 150 || deviation < -150)
-    {
-        ret = true;
+        deviation = pData->averaged.axisValue[E_Z_AXIS] - pData->current.axisValue[E_Z_AXIS];
+        deviation /= pData->averaged.axisValue[E_Z_AXIS];
+        if (deviation > 150 || deviation < -150)
+        {
+            ret = true;
+        }
     }
 
     return ret;
+}
+
+static void getXlGyroData(XLGYRO_DATA_S *pData)
+{
+    RAW_DATA_S aData = { 0 };
+    RAW_DATA_S aMin = { 0 };
+    RAW_DATA_S aMax = { 0 };
+
+    if (pData != NULL)
+    {
+        accelRawDataAveraged(&aData);
+        accelCalc(&aData, &pData->current);
+        averagedBufPush(&aAveragedBuf, &pData->current);
+        slidingWindowGetMin(&aSlidingWindow, &aMin);
+        slidingWindowGetMax(&aSlidingWindow, &aMax);
+        accelCalc(&aMin, &pData->min);
+        accelCalc(&aMax, &pData->max);
+        getTotalAveraged(&aAveragedBuf, &pData->averaged);
+    }
 }
 
 static int setInterfaceAttribs(int fd, int speed, int parity)
@@ -342,7 +334,7 @@ static int setInterfaceAttribs(int fd, int speed, int parity)
     if (tcgetattr (fd, &tty) != 0)
     {
         int err = errno;
-        printf("ERROR: tcgetattr: %s (%d)\n", strerror(err), err);
+        printf("[XLGYROD]: tcgetattr: %s (%d)\n", strerror(err), err);
         return -1;
     }
 
@@ -371,7 +363,7 @@ static int setInterfaceAttribs(int fd, int speed, int parity)
     if (tcsetattr(fd, TCSANOW, &tty) != 0)
     {
         int err = errno;
-        printf("ERROR: tcsetattr: %s (%d)\n", strerror(err), err);
+        printf("[XLGYROD]: tcsetattr: %s (%d)\n", strerror(err), err);
         return -1;
     }
     return 0;
@@ -384,7 +376,7 @@ static void setBlocking(int fd, int shouldBlock)
     if (tcgetattr (fd, &tty) != 0)
     {
         int err = errno;
-        printf("ERROR: tggetattr: %s (%d)\n", strerror(err), err);
+        printf("[XLGYROD]: tggetattr: %s (%d)\n", strerror(err), err);
         return;
     }
 
@@ -394,7 +386,7 @@ static void setBlocking(int fd, int shouldBlock)
     if (tcsetattr(fd, TCSANOW, &tty) != 0)
     {
         int err = errno;
-        printf("ERROR: setting term attributes: %s (%d)\n", strerror(err), err);
+        printf("[XLGYROD]: setting term attributes: %s (%d)\n", strerror(err), err);
     }
 }
 
@@ -435,11 +427,32 @@ static void shiftBuf(uint8_t *pInBuf, uint32_t fromIdx, uint32_t toIdx)
     }
 }
 
+static int sendToXlGyroServer(XLGYRO_DATA_S *pData)
+{
+    int ret = 0;
+    // char buffer[XLGYRO_SERVER_QUEUE_MSGSIZE];
+    // if (pData != NULL)
+    // {
+    //     ret = mq_send(
+    //         xlGyroServerMq,
+    //         buffer,
+    //         XLGYRO_SERVER_QUEUE_MSGSIZE,
+    //         XLGYRO_SERVER_QUEUE_MAX_PRIO);
+    // }
+
+    XlGyroQueuePush(pData);
+    printf("[XLGYROD]: pushed; queue count: %d\n", IsXlGyroQueueItemsCount());
+
+    return ret;
+}
+
 static void processReceivedPacket(DATA_PACKET_S *pPacket, uint32_t samples)
 {
     RAW_DATA_S aData = { 0 };
     RAW_DATA_S gData = { 0 };
     bool obstacle = false;
+    XLGYRO_DATA_S xlGyroData = { 0 };
+    int status = 0;
 
     for (int i = 0; i < samples; ++i)
     {
@@ -454,7 +467,17 @@ static void processReceivedPacket(DATA_PACKET_S *pPacket, uint32_t samples)
         // slidingWindowPush(&gSlidingWindow, &gData);
     }
 
-    obstacle = isObstacle();
+    getXlGyroData(&xlGyroData);
+    status = sendToXlGyroServer(&xlGyroData);
+    {
+        int err = errno;
+        if (status < 0)
+        {
+            printf("[XLGYROD]: failed to send: %s (%d)\n", strerror(err), err);
+        }
+    }
+
+    obstacle = isObstacle(&xlGyroData);
     if (obstacle)
     {
         printf("OOOOBBBSSSSTAAACCCLEEEEE\n");
@@ -507,11 +530,19 @@ int main(int argc, char *argv[])
         portname = DEFAULT_PORTNAME;
     }
 
-    int fd = open (portname, O_RDWR | O_NOCTTY | O_SYNC);
+    int serverStatus = CreateXlGyroServer();
+    if (serverStatus < 0)
+    {
+        int err = errno;
+        printf("[XLGYROD]: CreateXlGyroServer() failed; error: %s\n", strerror(err));
+        return serverStatus;
+    }
+
+    int fd = open(portname, O_RDWR | O_NOCTTY | O_SYNC);
     if (fd < 0)
     {
         int err = errno;
-        printf("ERROR: open() failed; error: %s\n", strerror(err));
+        printf("[XLGYROD]: open() failed; error: %s\n", strerror(err));
         return fd;
     }
     else
@@ -539,6 +570,7 @@ int main(int argc, char *argv[])
                     appendIdx = 0;
                     processIdx = 0;
                     unprocessedBytes = 0;
+                    printf("start not found\n");
                     break;
                 }
 
@@ -546,6 +578,7 @@ int main(int argc, char *argv[])
                 memcpy(&rxPacket.header, &rawDataBuf[processIdx], sizeof(PACKET_HEADER_S));
                 if (rxPacket.header.samples >= MAX_SAMPLES)
                 {
+                    printf("rxPacket.header.samples >= MAX_SAMPLES\n");
                     processIdx += sizeof(PACKET_HEADER_S);
                     shiftBuf(rawDataBuf, processIdx, 0);
 
@@ -568,6 +601,9 @@ int main(int argc, char *argv[])
                 if ( processIdx + packetLen + 4 > unprocessedBytes)
                 // if ( processIdx + packetLen + 2 > unprocessedBytes)
                 {
+                    printf("processIdx + packetLen + 4 > unprocessedBytes\n");
+                    printf("processIdx: %d; packetLen: %d; unprocessedBytes: %d\n",
+                        processIdx, packetLen, unprocessedBytes);
                     /* We do not received completed package yet.
                      * Wait for next chunk */
                     break;
@@ -577,6 +613,7 @@ int main(int argc, char *argv[])
                 // if ((processIdx + packetLen + 2) >= DATA_BUF_SIZE)
                 if ((processIdx + packetLen + 4) >= DATA_BUF_SIZE)
                 {
+                    printf("processIdx + packetLen + 4 > DATA_BUF_SIZE\n");
                     break;
                 }
 
