@@ -12,26 +12,34 @@
 #include <string.h>
 #include <time.h>
 #include <errno.h>
-#include "xlgyroserver.h"
+#include "xlgyro_data_processor.h"
 
-#define QUEUE_PERMS     ((int)(0644))
-#define QUEUE_ATTR_INITIALIZER ((struct mq_attr) {0, XLGYRO_SERVER_QUEUE_MSGSIZE, XLGYRO_SERVER_QUEUE_MSGSIZE, 0, {0}})
-
-static pthread_t xlgyroClientThread;
+static pthread_t xlgyroServerThread;
 static XLGYRO_DATA_QUEUE_S xlGyroQueue = { 0 };
 static pthread_mutex_t queueMut = PTHREAD_MUTEX_INITIALIZER;
 
-/*
-pthread_mutex_t mutex1 = PTHREAD_MUTEX_INITIALIZER;
-int counter=0;
-void functionC()
+static bool isObstacle(XLGYRO_DATA_S *pData)
 {
-   pthread_mutex_lock( &mutex1 );
-   counter++
-   pthread_mutex_unlock( &mutex1 );
-}
+    bool ret = false;
+    double deviation = 0;
 
-*/
+    if (pData != NULL)
+    {
+        if (pData->current.axisValue[E_Z_AXIS] > 0.4 || pData->current.axisValue[E_Z_AXIS] < -0.4)
+        {
+            ret = true;
+        }
+
+        deviation = pData->averaged.axisValue[E_Z_AXIS] - pData->current.axisValue[E_Z_AXIS];
+        deviation /= pData->averaged.axisValue[E_Z_AXIS];
+        if (deviation > 300 || deviation < -300)
+        {
+            ret = true;
+        }
+    }
+
+    return ret;
+}
 
 static void printReceivedData(XLGYRO_DATA_S *pData)
 {
@@ -60,39 +68,48 @@ static void printReceivedData(XLGYRO_DATA_S *pData)
     }
 }
 
-static void *xlgyroClient(void *arg)
+static void *xlgyroDataProcessorThread(void *arg)
 {
     XLGYRO_DATA_S xlGyroData = { 0 };
-    printf("[XLGYROSERVER]: thread created\n");
+    bool obstacle = false;
 
     bool queueStatus = false;
 
+    memset(&xlGyroData, 0, sizeof(XLGYRO_DATA_S));
+
     while (true)
     {
-        memset(&xlGyroData, 0, sizeof(XLGYRO_DATA_S));
-        queueStatus = XlGyroQueueGet(&xlGyroData);
-        if (queueStatus == true)
+        do
         {
-            printReceivedData(&xlGyroData);
-        }
+            queueStatus = XlGyroQueueGet(&xlGyroData);
+            if (queueStatus == true)
+            {
+                obstacle = isObstacle(&xlGyroData);
+                if (obstacle)
+                {
+                    printReceivedData(&xlGyroData);
+                    printf("OOOOBBBSSSSTAAACCCLEEEEE !!!\n");
+                }
+                printReceivedData(&xlGyroData);
+                memset(&xlGyroData, 0, sizeof(XLGYRO_DATA_S));
+            }
+        } while (queueStatus);
     }
 }
 
-int CreateXlGyroServer()
+int CreateXlGyroDataProcessor()
 {
-    return pthread_create(&xlgyroClientThread, NULL, xlgyroClient, NULL);
+    return pthread_create(&xlgyroServerThread, NULL, xlgyroDataProcessorThread, NULL);
 }
 
 bool XlGyroQueueGet(XLGYRO_DATA_S *pData)
 {
     bool ret = false;
-    bool isEmpty = false;
 
     if (pData != NULL)
     {
         pthread_mutex_lock(&queueMut);
-        isEmpty = IsXlGyroQueueEmpty();
-        if (!isEmpty)
+        if (xlGyroQueue.head != xlGyroQueue.tail)
         {
             memcpy(pData, &xlGyroQueue.queue[xlGyroQueue.head], sizeof(XLGYRO_DATA_S));
             xlGyroQueue.head++;
@@ -132,6 +149,7 @@ void XlGyroQueuePush(XLGYRO_DATA_S *pData)
         else
         {
             /* queue overlapped */
+            /* Old value was overwritten with new one. Move head */
             xlGyroQueue.head++;
             if (xlGyroQueue.head >= XLGYRO_SERVER_QUEUE_MAXMSG)
             {
@@ -140,20 +158,6 @@ void XlGyroQueuePush(XLGYRO_DATA_S *pData)
         }
         pthread_mutex_unlock(&queueMut);
     }
-}
-
-bool IsXlGyroQueueEmpty()
-{
-    bool ret = false;
-
-    pthread_mutex_lock(&queueMut);
-    if (xlGyroQueue.count == 0)
-    {
-        ret = true;
-    }
-    pthread_mutex_unlock(&queueMut);
-
-    return ret;
 }
 
 uint32_t IsXlGyroQueueItemsCount()

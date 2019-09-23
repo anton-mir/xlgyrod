@@ -1,7 +1,7 @@
 CC=gcc
-CFLAGS=-g -O0 -std=gnu99 -lpthread -lrt
-DEPS = crc16.h main.h xlgyroserver.h
-OBJ = crc16.o main.o xlgyroserver.o
+CFLAGS=-g -O0 -std=gnu99 -lpthread
+DEPS = crc16.h main.h xlgyro_data_processor.h
+OBJ = crc16.o main.o xlgyro_data_processor.o
 
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)
