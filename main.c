@@ -398,7 +398,7 @@ static void setBlocking(int fd, int shouldBlock)
     }
 }
 
-static int32_t findPacketStartIdx(uint8_t *pData, uint32_t len)
+static int32_t findPacketStartIdx(uint8_t *pData, uint32_t idxOffset, uint32_t len)
 {
     uint32_t ret = -1;
     if (pData == NULL || len == 0)
@@ -406,7 +406,7 @@ static int32_t findPacketStartIdx(uint8_t *pData, uint32_t len)
         return 0;
     }
 
-    for (uint32_t i = 0; i < (len - 3); ++i)
+    for (uint32_t i = idxOffset; i < (len - 3); ++i)
     {
         if ( pData[i] == PACKET_PREAMBULE_LO &&
              pData[i + 1] == PACKET_PREAMBULE_HI &&
@@ -439,6 +439,7 @@ static void processReceivedPacket(DATA_PACKET_S *pPacket, uint32_t samples)
 {
     RAW_DATA_S aData = { 0 };
     RAW_DATA_S gData = { 0 };
+    bool obstacle = false;
 
     for (int i = 0; i < samples; ++i)
     {
@@ -532,7 +533,7 @@ int main(int argc, char *argv[])
 
             do
             {
-                int32_t packetStart = findPacketStartIdx(&rawDataBuf[processIdx], unprocessedBytes);
+                int32_t packetStart = findPacketStartIdx(rawDataBuf, processIdx, unprocessedBytes);
                 if (packetStart < 0)
                 {
                     appendIdx = 0;
@@ -565,6 +566,7 @@ int main(int argc, char *argv[])
                 uint32_t packetLen = DATA_PACKET_LEN(rxPacket.header.samples);
 
                 if ( processIdx + packetLen + 4 > unprocessedBytes)
+                // if ( processIdx + packetLen + 2 > unprocessedBytes)
                 {
                     /* We do not received completed package yet.
                      * Wait for next chunk */
@@ -572,16 +574,24 @@ int main(int argc, char *argv[])
                 }
 
                 // uint16_t crc16 = CalcCrc16(&rawDataBuf[processIdx], packetLen);
+                // if ((processIdx + packetLen + 2) >= DATA_BUF_SIZE)
                 if ((processIdx + packetLen + 4) >= DATA_BUF_SIZE)
                 {
                     break;
                 }
 
+                // if ( rawDataBuf[processIdx + packetLen] == (uint8_t)(crc16 >> 8) &&
+                //      rawDataBuf[processIdx + packetLen + 1] == (uint8_t)(crc16) )
+                // {
+                //     printf("CRC is OK\n");
+                // }
+                // else
                 if ( rawDataBuf[processIdx + packetLen] != 0xA5 ||
                      rawDataBuf[processIdx + packetLen + 1] != 0xA5 ||
                      rawDataBuf[processIdx + packetLen + 2] != 0xA5 ||
                      rawDataBuf[processIdx + packetLen + 2] != 0xA5 )
                 {
+                    printf("CRC is WRONG\n");
                     processIdx += sizeof(PACKET_HEADER_S);
                     shiftBuf(rawDataBuf, processIdx, 0);
 
