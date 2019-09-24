@@ -12,6 +12,7 @@
 #include <mqueue.h>
 #include <time.h>
 #include "crc16.h"
+#include "xlgyro_server.h"
 #include "xlgyro_data_processor.h"
 
 #define LINEAR_ACCELERATION_RANGE_2         (0.000061)
@@ -24,7 +25,7 @@
 #define SLIDING_WINDOW_SIZE                 (32)
 #define AVERAGED_BUF_SIZE                   (300)       // ~ 30s
 
-#define DEFAULT_PORTNAME     "/dev/ttyUSB1"
+#define DEFAULT_PORTNAME     "/dev/ttyUSB0"
 
 #define DATA_BUF_SIZE               (1024 * 8)
 #define PACKET_PREAMBULE            (0xAA55)
@@ -460,12 +461,20 @@ int main(int argc, char *argv[])
         portname = DEFAULT_PORTNAME;
     }
 
-    int serverStatus = CreateXlGyroDataProcessor();
-    if (serverStatus < 0)
+    int status = CreateXlGyroDataProcessor();
+    if (status < 0)
+    {
+        int err = errno;
+        printf("[XLGYROD]: CreateXlGyroDataProcessor() failed; error: %s\n", strerror(err));
+        return status;
+    }
+
+    status = CreateXlGyroServer();
+    if (status < 0)
     {
         int err = errno;
         printf("[XLGYROD]: CreateXlGyroServer() failed; error: %s\n", strerror(err));
-        return serverStatus;
+        return status;
     }
 
     int fd = open(portname, O_RDWR | O_NOCTTY | O_SYNC);
