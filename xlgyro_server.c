@@ -27,6 +27,7 @@ static void *xlgyroServerThread(void *arg)
     struct sockaddr_in clientAddr;
     int socketOptions = 1;
     int status = 0;
+    int error = 0;
     int selectStatus = 0;
     int client = 0;
     int addrlen = 0;
@@ -130,8 +131,15 @@ static void *xlgyroServerThread(void *arg)
                 inet_ntoa(clientAddr.sin_addr),
                 ntohs(clientAddr.sin_port));
 
+            error = pthread_mutex_lock(&socketMut);
+            if (error != 0)
+            {
+                printf("[XLGYRODSERVER]: pthread_mutex_lock() failed; error: %d\n", error);
+                continue;
+            }
+
             bool clientAdded = false;
-            pthread_mutex_lock(&socketMut);
+
             for (idx = 0; idx < XLGYRO_ACTIVE_CLIENTS_NUM; ++idx)
             {
                 if (clientSocket[idx] == 0)
@@ -141,7 +149,13 @@ static void *xlgyroServerThread(void *arg)
                     break;
                 }
             }
-            pthread_mutex_unlock(&socketMut);
+
+            error = pthread_mutex_unlock(&socketMut);
+            if (error != 0)
+            {
+                printf("[XLGYRODSERVER]: pthread_mutex_unlock() failed; error: %d\n", error);
+                continue;
+            }
 
             if (clientAdded != true)
             {
@@ -155,14 +169,25 @@ static void *xlgyroServerThread(void *arg)
 
                 if (FD_ISSET(client , &readfds))
                 {
+                    error = pthread_mutex_lock(&socketMut);
+                    if (error != 0)
+                    {
+                        printf("[XLGYRODDATA]: pthread_mutex_lock() failed; error: %d\n", error);
+                        continue;
+                    }
                     /* Check if it was for closing */
                     readBytes = read(client , checkConnectionBuf, CHECK_CONNECTION_BUF_SIZE);
                     if (readBytes == 0)
                     {
                         close(client);
-                        pthread_mutex_lock(&socketMut);
                         clientSocket[idx] = 0;
-                        pthread_mutex_unlock(&socketMut);
+                    }
+
+                    error = pthread_mutex_unlock(&socketMut);
+                    if (error != 0)
+                    {
+                        printf("[XLGYRODDATA]: pthread_mutex_unlock() failed; error: %d\n", error);
+                        continue;
                     }
                 }
             }
@@ -178,10 +203,17 @@ int XlGyroServerCreate(void *args)
 void XlGyroServerSendToClients(uint8_t *pData, uint32_t len)
 {
     uint32_t idx = 0;
+    int error = 0;
 
     if (pData != NULL)
     {
-        pthread_mutex_lock(&socketMut);
+        error = pthread_mutex_lock(&socketMut);
+        if (error != 0)
+        {
+            printf("[XLGYRODDATA]: pthread_mutex_lock() failed; error: %d\n", error);
+            return;
+        }
+
         for (idx = 0; idx < XLGYRO_ACTIVE_CLIENTS_NUM; ++idx)
         {
             /* If it's active client */
@@ -190,7 +222,13 @@ void XlGyroServerSendToClients(uint8_t *pData, uint32_t len)
                 send(clientSocket[idx], pData, len, 0);
             }
         }
-        pthread_mutex_unlock(&socketMut);
+
+        error = pthread_mutex_unlock(&socketMut);
+        if (error != 0)
+        {
+            printf("[XLGYRODDATA]: pthread_mutex_unlock() failed; error: %d\n", error);
+            return;
+        }
     }
 }
 

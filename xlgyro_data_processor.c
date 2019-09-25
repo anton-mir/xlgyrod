@@ -134,10 +134,17 @@ int XlGyroDataProcessorCreate(void *args)
 bool XlGyroQueueGet(XLGYRO_DATA_S *pData)
 {
     bool ret = false;
+    int error = 0;
 
     if (pData != NULL)
     {
-        pthread_mutex_lock(&queueMut);
+        error = pthread_mutex_lock(&queueMut);
+        if (error != 0)
+        {
+            printf("[XLGYRODDATA]: pthread_mutex_lock() failed; error: %d\n", error);
+            return false;
+        }
+
         if (xlGyroQueue.head != xlGyroQueue.tail)
         {
             memcpy(pData, &xlGyroQueue.queue[xlGyroQueue.head], sizeof(XLGYRO_DATA_S));
@@ -153,7 +160,12 @@ bool XlGyroQueueGet(XLGYRO_DATA_S *pData)
 
             ret = true;
         }
-        pthread_mutex_unlock(&queueMut);
+        error = pthread_mutex_unlock(&queueMut);
+        if (error != 0)
+        {
+            printf("[XLGYRODDATA]: pthread_mutex_unlock() failed; error: %d\n", error);
+            return false;
+        }
     }
 
     return ret;
@@ -161,9 +173,17 @@ bool XlGyroQueueGet(XLGYRO_DATA_S *pData)
 
 void XlGyroQueuePush(XLGYRO_DATA_S *pData)
 {
+    int error = 0;
+
     if (pData != NULL)
     {
-        pthread_mutex_lock(&queueMut);
+        error = pthread_mutex_lock(&queueMut);
+        if (error != 0)
+        {
+            printf("[XLGYRODDATA]: pthread_mutex_lock() failed; error: %d\n", error);
+            return;
+        }
+
         memcpy(&xlGyroQueue.queue[xlGyroQueue.tail], pData, sizeof(XLGYRO_DATA_S));
         xlGyroQueue.tail++;
         if (xlGyroQueue.tail >= XLGYRO_DATA_PROCESSOR_MAXMSG)
@@ -185,17 +205,34 @@ void XlGyroQueuePush(XLGYRO_DATA_S *pData)
                 xlGyroQueue.head = 0;
             }
         }
-        pthread_mutex_unlock(&queueMut);
+        error = pthread_mutex_unlock(&queueMut);
+        if (error != 0)
+        {
+            printf("[XLGYRODDATA]: pthread_mutex_unlock() failed; error: %d\n", error);
+            return;
+        }
     }
 }
 
 uint32_t IsXlGyroQueueItemsCount()
 {
     uint32_t ret = 0;
+    int error = 0;
 
-    pthread_mutex_lock(&queueMut);
+    error = pthread_mutex_lock(&queueMut);
+    if (error != 0)
+    {
+        printf("[XLGYRODDATA]: pthread_mutex_lock() failed; error: %d\n", error);
+        return 0;
+    }
     ret = xlGyroQueue.count;
-    pthread_mutex_unlock(&queueMut);
+    error = pthread_mutex_unlock(&queueMut);
+    if (error != 0)
+    {
+        int err = errno;
+        printf("[XLGYRODDATA]: pthread_mutex_unlock() failed; error: %d\n", error);
+        return 0;
+    }
 
     return ret;
 }
