@@ -108,5 +108,14 @@ void XlGyroReadOptions(int argc, char *argv[], XLGYRO_READER_THREAD_PARAMS_S *pP
                 }
             }
         }
+
+        printf("Current settings: \n");
+        printf("ttyname     : %s\n", pParams->ttyname);
+        printf("deviationHi : %+lf\n", pParams->deviationHi);
+        printf("deviationLo : %+lf\n", pParams->deviationLo);
+        printf("zAxisThdHi  : %+lf\n", pParams->zAxisThdHi);
+        printf("zAxisThdLo  : %+lf\n", pParams->zAxisThdLo);
+        printf("port        : %d\n", pParams->port);
+        printf("=========================================\n\n");
     }
 }
