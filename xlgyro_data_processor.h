@@ -46,7 +46,7 @@ typedef struct XLGYRO_DATA_QUEUE_STRUCT
     uint32_t count;
 } XLGYRO_DATA_QUEUE_S;
 
-int CreateXlGyroDataProcessor();
+int XlGyroDataProcessorCreate(void *args);
 void XlGyroQueuePush(XLGYRO_DATA_S *pData);
 bool XlGyroQueueGet(XLGYRO_DATA_S *pData);
 uint32_t IsXlGyroQueueItemsCount();

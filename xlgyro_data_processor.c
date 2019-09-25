@@ -15,6 +15,8 @@
 #include "xlgyro_data_processor.h"
 #include "xlgyro_server.h"
 
+#define SLEEP_ON_QUEUE_EMPTY_TIMEOUT        (200000)    // 200 ms
+
 static pthread_t xlgyroDataProcessorTh;
 static XLGYRO_DATA_QUEUE_S xlGyroQueue = { 0 };
 static pthread_mutex_t queueMut = PTHREAD_MUTEX_INITIALIZER;
@@ -47,22 +49,22 @@ static void printReceivedData(XLGYRO_DATA_S *pData)
     if (pData != NULL)
     {
         printf("=========================================================================\n");
-        printf("[XLGYROSERVER]: Min: [%+.6f]; [%+.6f]; [%+.6f]; \n",
+        printf("[XLGYRODDATA]: Min: [%+.6f]; [%+.6f]; [%+.6f]; \n",
                     pData->min.axisValue[E_X_AXIS],
                     pData->min.axisValue[E_Y_AXIS],
                     pData->min.axisValue[E_Z_AXIS]);
 
-        printf("[XLGYROSERVER]: Max: [%+.6f]; [%+.6f]; [%+.6f]; \n",
+        printf("[XLGYRODDATA]: Max: [%+.6f]; [%+.6f]; [%+.6f]; \n",
                     pData->max.axisValue[E_X_AXIS],
                     pData->max.axisValue[E_Y_AXIS],
                     pData->max.axisValue[E_Z_AXIS]);
 
-        printf("[XLGYROSERVER]: Avr: [%+.6f]; [%+.6f]; [%+.6f]; \n",
+        printf("[XLGYRODDATA]: Avr: [%+.6f]; [%+.6f]; [%+.6f]; \n",
                     pData->averaged.axisValue[E_X_AXIS],
                     pData->averaged.axisValue[E_Y_AXIS],
                     pData->averaged.axisValue[E_Z_AXIS]);
 
-        printf("[XLGYROSERVER]: Cur: [%+.6f]; [%+.6f]; [%+.6f]; \n",
+        printf("[XLGYRODDATA]: Cur: [%+.6f]; [%+.6f]; [%+.6f]; \n",
                     pData->current.axisValue[E_X_AXIS],
                     pData->current.axisValue[E_Y_AXIS],
                     pData->current.axisValue[E_Z_AXIS]);
@@ -89,10 +91,11 @@ static void xlGyroSendData(XLGYRO_DATA_S *pData, bool isObstacle)
 
 static void *xlgyroDataProcessorThread(void *arg)
 {
+    (void)arg;
     XLGYRO_DATA_S xlGyroData = { 0 };
     bool obstacle = false;
-
     bool queueStatus = false;
+    uint32_t items = 0;
 
     memset(&xlGyroData, 0, sizeof(XLGYRO_DATA_S));
 
@@ -112,13 +115,20 @@ static void *xlgyroDataProcessorThread(void *arg)
                 printReceivedData(&xlGyroData);
                 memset(&xlGyroData, 0, sizeof(XLGYRO_DATA_S));
             }
+
+            items = IsXlGyroQueueItemsCount();
+            if (items == 0)
+            {
+                usleep(SLEEP_ON_QUEUE_EMPTY_TIMEOUT);
+            }
+
         } while (queueStatus);
     }
 }
 
-int CreateXlGyroDataProcessor()
+int XlGyroDataProcessorCreate(void *args)
 {
-    return pthread_create(&xlgyroDataProcessorTh, NULL, xlgyroDataProcessorThread, NULL);
+    return pthread_create(&xlgyroDataProcessorTh, NULL, xlgyroDataProcessorThread, args);
 }
 
 bool XlGyroQueueGet(XLGYRO_DATA_S *pData)

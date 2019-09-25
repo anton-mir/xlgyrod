@@ -170,9 +170,9 @@ static void *xlgyroServerThread(void *arg)
     }
 }
 
-int CreateXlGyroServer()
+int XlGyroServerCreate(void *args)
 {
-    return pthread_create(&xlgyroServerTh, NULL, xlgyroServerThread, NULL);
+    return pthread_create(&xlgyroServerTh, NULL, xlgyroServerThread, args);
 }
 
 void XlGyroServerSendToClients(uint8_t *pData, uint32_t len)
