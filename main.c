@@ -22,12 +22,25 @@ int main(int argc, char *argv[])
     uint32_t appendIdx = 0;
     uint32_t processIdx = 0;
     uint32_t unprocessedBytes = 0;
+    int status = 0;
 
     XlGyroReadOptions(argc, argv, &params);
 
-    int status = XlGyroDataProcessorCreate((void*)&params);
+    if (params.daemon == true)
+    {
+        status = daemon(1, 0);
+        if (status < 0)
+        {
+            int err = errno;
+            printf("[XLGYROD]: daemon() failed; error: %s\n", strerror(err));
+            return status;
+        }
+    }
+
+    status = XlGyroDataProcessorCreate((void*)&params);
     if (status < 0)
     {
+
         int err = errno;
         printf("[XLGYROD]: XlGyroDataProcessorCreate() failed; error: %s\n", strerror(err));
         return status;

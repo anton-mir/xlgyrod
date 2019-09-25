@@ -1,7 +1,7 @@
 #include <getopt.h>
 #include <stddef.h>
-#include <stdbool.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include "xlgyro_options.h"
 
@@ -11,16 +11,18 @@
 #define Z_AXIS_THD_HI           (double)(0.4)
 #define Z_AXIS_THD_LO           (double)(-0.4)
 #define DEFAULT_SERVER_PORT     (11333)
+#define DEFAULT_DAEMON          (uint8_t)(0)
 
 static struct option long_options[] =
 {
-            {"dh",   required_argument, NULL,  0 },
-            {"dl",   required_argument, NULL,  0 },
-            {"zh",   required_argument, NULL,  0 },
-            {"zl",   required_argument, NULL,  0 },
-            {"tty",  required_argument, NULL,  0 },
-            {"port", required_argument, NULL,  0 },
-            {0,      0,                 0,     0 }
+            {"dh",     required_argument, NULL,  0 },
+            {"dl",     required_argument, NULL,  0 },
+            {"zh",     required_argument, NULL,  0 },
+            {"zl",     required_argument, NULL,  0 },
+            {"tty",    required_argument, NULL,  0 },
+            {"port",   required_argument, NULL,  0 },
+            {"daemon", required_argument, NULL,  0 },
+            {0,        0,                 0,     0 }
 };
 
 void XlGyroReadOptions(int argc, char *argv[], XLGYRO_READER_THREAD_PARAMS_S *pParams)
@@ -36,6 +38,7 @@ void XlGyroReadOptions(int argc, char *argv[], XLGYRO_READER_THREAD_PARAMS_S *pP
         pParams->zAxisThdHi = Z_AXIS_THD_HI;
         pParams->zAxisThdLo = Z_AXIS_THD_LO;
         pParams->port = DEFAULT_SERVER_PORT;
+        pParams->daemon = DEFAULT_DAEMON;
 
         while (true)
         {
@@ -102,6 +105,15 @@ void XlGyroReadOptions(int argc, char *argv[], XLGYRO_READER_THREAD_PARAMS_S *pP
                     break;
                 }
 
+                case 6:
+                {
+                    if (optarg != NULL)
+                    {
+                        pParams->daemon = atoi(optarg);
+                    }
+                    break;
+                }
+
                 default:
                 {
                     break;
@@ -116,6 +128,7 @@ void XlGyroReadOptions(int argc, char *argv[], XLGYRO_READER_THREAD_PARAMS_S *pP
         printf("zAxisThdHi  : %+lf\n", pParams->zAxisThdHi);
         printf("zAxisThdLo  : %+lf\n", pParams->zAxisThdLo);
         printf("port        : %d\n", pParams->port);
+        printf("daemon      : %d\n", pParams->daemon);
         printf("=========================================\n\n");
     }
 }

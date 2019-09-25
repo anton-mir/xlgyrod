@@ -11,6 +11,7 @@ typedef struct XLGYRO_READER_THREAD_PARAMS_STRUCT
     double zAxisThdHi;
     double zAxisThdLo;
     uint16_t port;
+    bool daemon;
 } XLGYRO_READER_THREAD_PARAMS_S;
 
 void XlGyroReadOptions(int argc, char *argv[], XLGYRO_READER_THREAD_PARAMS_S *pParams);

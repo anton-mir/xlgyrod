@@ -33,7 +33,10 @@ static pthread_cond_t queueCond = PTHREAD_COND_INITIALIZER;
 
 static XLGYRO_READER_THREAD_PARAMS_S params = { 0 };
 
+static FILE *fpLog;
+
 static bool xlGyroQueueGetUnsafe(XLGYRO_DATA_S *pData);
+static void logObstacle();
 
 static bool isObstacle(XLGYRO_DATA_S *pData)
 {
@@ -60,30 +63,70 @@ static bool isObstacle(XLGYRO_DATA_S *pData)
     return ret;
 }
 
+static void logObstacle()
+{
+    if (fpLog != NULL)
+    {
+        fprintf(fpLog, "[XLGYRODDATA] ++++++++++++ OBSTACLE ++++++++++++\n");
+    }
+
+    if (params.daemon == 0)
+    {
+        printf( "[XLGYRODDATA]: ++++++++++++ OBSTACLE ++++++++++++\n");
+    }
+}
+
 static void printReceivedData(XLGYRO_DATA_S *pData)
 {
     if (pData != NULL)
     {
-        printf("=========================================================================\n");
-        printf("[XLGYRODDATA]: Min: [%+.6f]; [%+.6f]; [%+.6f]; \n",
-                    pData->min.axisValue[E_X_AXIS],
-                    pData->min.axisValue[E_Y_AXIS],
-                    pData->min.axisValue[E_Z_AXIS]);
+        if (fpLog != NULL)
+        {
+            fprintf(fpLog, "=========================================================================\n");
+            fprintf(fpLog, "[XLGYRODDATA]: Min: [%+.6f]; [%+.6f]; [%+.6f]; \n",
+                        pData->min.axisValue[E_X_AXIS],
+                        pData->min.axisValue[E_Y_AXIS],
+                        pData->min.axisValue[E_Z_AXIS]);
 
-        printf("[XLGYRODDATA]: Max: [%+.6f]; [%+.6f]; [%+.6f]; \n",
-                    pData->max.axisValue[E_X_AXIS],
-                    pData->max.axisValue[E_Y_AXIS],
-                    pData->max.axisValue[E_Z_AXIS]);
+            fprintf(fpLog, "[XLGYRODDATA]: Max: [%+.6f]; [%+.6f]; [%+.6f]; \n",
+                        pData->max.axisValue[E_X_AXIS],
+                        pData->max.axisValue[E_Y_AXIS],
+                        pData->max.axisValue[E_Z_AXIS]);
 
-        printf("[XLGYRODDATA]: Avr: [%+.6f]; [%+.6f]; [%+.6f]; \n",
-                    pData->averaged.axisValue[E_X_AXIS],
-                    pData->averaged.axisValue[E_Y_AXIS],
-                    pData->averaged.axisValue[E_Z_AXIS]);
+            fprintf(fpLog, "[XLGYRODDATA]: Avr: [%+.6f]; [%+.6f]; [%+.6f]; \n",
+                        pData->averaged.axisValue[E_X_AXIS],
+                        pData->averaged.axisValue[E_Y_AXIS],
+                        pData->averaged.axisValue[E_Z_AXIS]);
 
-        printf("[XLGYRODDATA]: Cur: [%+.6f]; [%+.6f]; [%+.6f]; \n",
-                    pData->current.axisValue[E_X_AXIS],
-                    pData->current.axisValue[E_Y_AXIS],
-                    pData->current.axisValue[E_Z_AXIS]);
+            fprintf(fpLog, "[XLGYRODDATA]: Cur: [%+.6f]; [%+.6f]; [%+.6f]; \n",
+                        pData->current.axisValue[E_X_AXIS],
+                        pData->current.axisValue[E_Y_AXIS],
+                        pData->current.axisValue[E_Z_AXIS]);
+        }
+
+        if (params.daemon == 0)
+        {
+            printf("=========================================================================\n");
+            printf("[XLGYRODDATA]: Min: [%+.6f]; [%+.6f]; [%+.6f]; \n",
+                        pData->min.axisValue[E_X_AXIS],
+                        pData->min.axisValue[E_Y_AXIS],
+                        pData->min.axisValue[E_Z_AXIS]);
+
+            printf("[XLGYRODDATA]: Max: [%+.6f]; [%+.6f]; [%+.6f]; \n",
+                        pData->max.axisValue[E_X_AXIS],
+                        pData->max.axisValue[E_Y_AXIS],
+                        pData->max.axisValue[E_Z_AXIS]);
+
+            printf("[XLGYRODDATA]: Avr: [%+.6f]; [%+.6f]; [%+.6f]; \n",
+                        pData->averaged.axisValue[E_X_AXIS],
+                        pData->averaged.axisValue[E_Y_AXIS],
+                        pData->averaged.axisValue[E_Z_AXIS]);
+
+            printf("[XLGYRODDATA]: Cur: [%+.6f]; [%+.6f]; [%+.6f]; \n",
+                        pData->current.axisValue[E_X_AXIS],
+                        pData->current.axisValue[E_Y_AXIS],
+                        pData->current.axisValue[E_Z_AXIS]);
+        }
     }
 }
 
@@ -120,6 +163,8 @@ static void *xlgyroDataProcessorThread(void *arg)
         memcpy(&params, arg, sizeof(XLGYRO_READER_THREAD_PARAMS_S));
     }
 
+    fpLog = fopen("xlgyrod.log", "w");
+
     while (true)
     {
         do
@@ -155,7 +200,7 @@ static void *xlgyroDataProcessorThread(void *arg)
                 obstacle = isObstacle(&xlGyroData);
                 if (obstacle)
                 {
-                    printf("OOOOBBBSSSSTAAACCCLEEEEE !!!\n");
+                    logObstacle();
                 }
                 xlGyroSendData(&xlGyroData, obstacle);
                 printReceivedData(&xlGyroData);
