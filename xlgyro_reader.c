@@ -10,6 +10,7 @@
 #include "xlgyro_data_processor.h"
 #include "xlgyro_server.h"
 #include "xlgyro_reader.h"
+#include "xlgyro_options.h"
 
 #define LINEAR_ACCELERATION_RANGE_2         (0.000061)
 #define LINEAR_ACCELERATION_RANGE_4         (0.000122)
@@ -113,6 +114,8 @@ static AVERAGED_BUF_S aAveragedBuf = { 0 };
 static pthread_t xlgyroReaderTh;
 
 static READ_BUF_CTRL_S bufCtrl = { 0 };
+
+static XLGYRO_READER_THREAD_PARAMS_S params = { 0 };
 
 static int serialInterfaceInit(int fd, int speed, int parity);
 static int32_t findPacketStartIdx(uint8_t *pData, uint32_t idxOffset, uint32_t len);
@@ -578,9 +581,13 @@ static void *xlgyroReaderThread(void *arg)
     int status = 0;
     ssize_t size = 0;
     int32_t packetStartIdx = 0;
-    XLGYRO_READER_THREAD_PARAMS_S *pParams = (XLGYRO_READER_THREAD_PARAMS_S*)arg;
 
-    portFd = open(pParams->portname, O_RDWR | O_NOCTTY);
+    if (arg != NULL)
+    {
+        memcpy(&params, arg, sizeof(XLGYRO_READER_THREAD_PARAMS_S));
+    }
+
+    portFd = open(params.ttyname, O_RDWR | O_NOCTTY);
     if (portFd < 0)
     {
         int err = errno;
@@ -588,7 +595,7 @@ static void *xlgyroReaderThread(void *arg)
         return NULL;
     }
 
-    printf("Opened: %s\n", pParams->portname);
+    printf("Opened: %s\n", params.ttyname);
 
     status = serialInterfaceInit(portFd, B115200, 0);
     if (status < 0)

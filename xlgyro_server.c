@@ -10,13 +10,17 @@
 #include <string.h>
 #include <stdio.h>
 #include "xlgyro_server.h"
+#include "xlgyro_options.h"
 
 #define CHECK_CONNECTION_BUF_SIZE       (32)
+#define XLGYRO_ACTIVE_CLIENTS_NUM       (32)
 
 static int clientSocket[XLGYRO_ACTIVE_CLIENTS_NUM] = { 0 };
 static pthread_t xlgyroServerTh;
 static pthread_mutex_t socketMut = PTHREAD_MUTEX_INITIALIZER;
 static uint8_t checkConnectionBuf[CHECK_CONNECTION_BUF_SIZE];
+
+static XLGYRO_READER_THREAD_PARAMS_S params = { 0 };
 
 static void *xlgyroServerThread(void *arg)
 {
@@ -36,6 +40,11 @@ static void *xlgyroServerThread(void *arg)
 
     //set of socket descriptors
     fd_set readfds;
+
+    if (arg != NULL)
+    {
+        memcpy(&params, arg, sizeof(XLGYRO_READER_THREAD_PARAMS_S));
+    }
 
     for (idx = 0; idx < XLGYRO_ACTIVE_CLIENTS_NUM; ++idx)
     {
@@ -61,7 +70,7 @@ static void *xlgyroServerThread(void *arg)
 
     srvAddr.sin_family = AF_INET;
     srvAddr.sin_addr.s_addr = INADDR_ANY;
-    srvAddr.sin_port = htons(XLGYRO_SERVER_PORT);
+    srvAddr.sin_port = htons(params.port);
 
     status = bind(listenSocket, (struct sockaddr*)&srvAddr, sizeof(srvAddr));
     if (status < 0)
@@ -71,7 +80,7 @@ static void *xlgyroServerThread(void *arg)
         return NULL;
     }
 
-    printf("[XLGYRODSERVER]: listen on port: %d\n", XLGYRO_SERVER_PORT);
+    printf("[XLGYRODSERVER]: listen on port: %d\n", params.port);
 
     status = listen(listenSocket, 2);
     if (status < 0)

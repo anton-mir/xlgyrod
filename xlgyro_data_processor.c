@@ -14,13 +14,24 @@
 #include <errno.h>
 #include "xlgyro_data_processor.h"
 #include "xlgyro_server.h"
+#include "xlgyro_options.h"
 
-#define SLEEP_ON_QUEUE_EMPTY_TIMEOUT        (200000)    // 200 ms
+#define XLGYRO_DATA_PROCESSOR_MAXMSG        (32)    /* Maximum number of messages. */
+
+typedef struct XLGYRO_DATA_QUEUE_STRUCT
+{
+    uint32_t head;
+    uint32_t tail;
+    XLGYRO_DATA_S queue[XLGYRO_DATA_PROCESSOR_MAXMSG];
+    uint32_t count;
+} XLGYRO_DATA_QUEUE_S;
 
 static pthread_t xlgyroDataProcessorTh;
 static XLGYRO_DATA_QUEUE_S xlGyroQueue = { 0 };
 static pthread_mutex_t queueMtx = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t queueCond = PTHREAD_COND_INITIALIZER;
+
+static XLGYRO_READER_THREAD_PARAMS_S params = { 0 };
 
 static bool xlGyroQueueGetUnsafe(XLGYRO_DATA_S *pData);
 
@@ -31,14 +42,16 @@ static bool isObstacle(XLGYRO_DATA_S *pData)
 
     if (pData != NULL)
     {
-        if (pData->current.axisValue[E_Z_AXIS] > 0.4 || pData->current.axisValue[E_Z_AXIS] < -0.4)
+        if ( pData->current.axisValue[E_Z_AXIS] > params.zAxisThdHi ||
+             pData->current.axisValue[E_Z_AXIS] < params.zAxisThdLo )
         {
             ret = true;
         }
 
         deviation = pData->averaged.axisValue[E_Z_AXIS] - pData->current.axisValue[E_Z_AXIS];
         deviation /= pData->averaged.axisValue[E_Z_AXIS];
-        if (deviation > 300 || deviation < -300)
+        if ( deviation > params.deviationHi ||
+             deviation < params.deviationLo )
         {
             ret = true;
         }
@@ -94,7 +107,6 @@ static void xlGyroSendData(XLGYRO_DATA_S *pData, bool isObstacle)
 
 static void *xlgyroDataProcessorThread(void *arg)
 {
-    (void)arg;
     XLGYRO_DATA_S xlGyroData = { 0 };
     bool obstacle = false;
     bool queueStatus = false;
@@ -102,6 +114,11 @@ static void *xlgyroDataProcessorThread(void *arg)
     int error = 0;
 
     memset(&xlGyroData, 0, sizeof(XLGYRO_DATA_S));
+
+    if (arg != NULL)
+    {
+        memcpy(&params, arg, sizeof(XLGYRO_READER_THREAD_PARAMS_S));
+    }
 
     while (true)
     {

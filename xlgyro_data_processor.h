@@ -3,7 +3,6 @@
 
 #include <stdint.h>
 
-#define XLGYRO_DATA_PROCESSOR_MAXMSG        (32)                  /* Maximum number of messages. */
 #define XLGYRO_TRAILER_SIZE                 (4)
 #define XLGYRO_TRAILER_VALUE                (0xA5)
 #define XLGYRO_PREAMBULE_VALUE              (0xAA55)
@@ -37,14 +36,6 @@ typedef struct XLGYRO_PACKET_STRUCT
     uint8_t trailer[4];
     bool isObstacle;
 } XLGYRO_PACKET_S;
-
-typedef struct XLGYRO_DATA_QUEUE_STRUCT
-{
-    uint32_t head;
-    uint32_t tail;
-    XLGYRO_DATA_S queue[XLGYRO_DATA_PROCESSOR_MAXMSG];
-    uint32_t count;
-} XLGYRO_DATA_QUEUE_S;
 
 int XlGyroDataProcessorCreate(void *args);
 void XlGyroQueuePush(XLGYRO_DATA_S *pData);

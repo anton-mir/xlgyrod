@@ -13,27 +13,19 @@
 #include "xlgyro_server.h"
 #include "xlgyro_data_processor.h"
 #include "xlgyro_reader.h"
+#include "xlgyro_options.h"
 
-#define DEFAULT_PORTNAME    "/dev/ttyUSB0"
+static XLGYRO_READER_THREAD_PARAMS_S params;
 
 int main(int argc, char *argv[])
 {
     uint32_t appendIdx = 0;
     uint32_t processIdx = 0;
     uint32_t unprocessedBytes = 0;
-    char *portname = NULL;
-    XLGYRO_READER_THREAD_PARAMS_S params;
 
-    if (argc > 1)
-    {
-        params.portname = argv[1];
-    }
-    else
-    {
-        params.portname = DEFAULT_PORTNAME;
-    }
+    XlGyroReadOptions(argc, argv, &params);
 
-    int status = XlGyroDataProcessorCreate(NULL);
+    int status = XlGyroDataProcessorCreate((void*)&params);
     if (status < 0)
     {
         int err = errno;
@@ -41,7 +33,7 @@ int main(int argc, char *argv[])
         return status;
     }
 
-    status = XlGyroServerCreate(NULL);
+    status = XlGyroReaderCreate((void*)&params);
     if (status < 0)
     {
         int err = errno;
@@ -49,7 +41,7 @@ int main(int argc, char *argv[])
         return status;
     }
 
-    status = XlGyroReaderCreate((void*)&params);
+    status = XlGyroServerCreate((void*)&params);
     if (status < 0)
     {
         int err = errno;
