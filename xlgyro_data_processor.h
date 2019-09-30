@@ -33,8 +33,8 @@ typedef struct XLGYRO_PACKET_STRUCT
     uint16_t preambule1;
     uint16_t preambule2;
     XLGYRO_DATA_S data;
-    uint8_t trailer[4];
     bool isObstacle;
+    uint8_t trailer[XLGYRO_TRAILER_SIZE];
 } XLGYRO_PACKET_S;
 
 int XlGyroDataProcessorCreate(void *args);
