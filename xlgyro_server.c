@@ -222,13 +222,13 @@ void XlGyroServerSendToClients(uint8_t *pData, uint32_t len)
             printf("[XLGYRODDATA]: pthread_mutex_lock() failed; error: %d\n", error);
             return;
         }
-
         for (idx = 0; idx < XLGYRO_ACTIVE_CLIENTS_NUM; ++idx)
         {
             /* If it's active client */
             if (clientSocket[idx] != 0)
             {
                 send(clientSocket[idx], pData, len, 0);
+                printf("::: Sent to socket %d ::: \n", clientSocket[idx]);
             }
         }
 
