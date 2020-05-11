@@ -6,6 +6,7 @@
 typedef struct XLGYRO_READER_THREAD_PARAMS_STRUCT
 {
     char *ttyname;
+    char *ttytest;
     double deviationHi;
     double deviationLo;
     double zAxisThdHi;
