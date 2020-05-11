@@ -756,7 +756,7 @@ static void *xlgyroTestThread(void *arg)
         //Generate paylode with random amount of aValue,gValue values
         generate_payload(payload);
         payloadLen = DATA_PACKET_LEN(payload[0].header.samples);
-        encapsulteAsRaw(txBuf,payload,payloadLen);
+        encapsulateAsRaw(txBuf,payload,payloadLen);
 
         bytes_written = write(portFd, txBuf, sizeof(txBuf));
 
@@ -792,7 +792,7 @@ void generate_payload(DATA_PACKET_S *payload)
     }
 }
 
-void encapsulteAsRaw(uint8_t raw_data[],DATA_PACKET_S *payload, uint32_t payloadLen)
+void encapsulateAsRaw(uint8_t raw_data[],DATA_PACKET_S *payload, uint32_t payloadLen)
 {
     if ((payloadLen + 4) <= MAX_SAMPLES*6)   
     {
