@@ -595,7 +595,8 @@ static void *xlgyroReaderThread(void *arg)
     {
         int err = errno;
         printf("[XLGYRODREADER]: open() failed; error: %s\n", strerror(err));
-        return NULL;
+        printf("[XLGYRODREADER]: Connect device!\n");
+        while ( (portFd = open(params.ttyname, O_RDWR | O_NOCTTY))<0) ;
     }
 
     printf("Opened: %s\n", params.ttyname);
@@ -609,6 +610,7 @@ static void *xlgyroReaderThread(void *arg)
     while (true)
     {
         size = read(portFd, &rawDataBuf[bufCtrl.appendIdx], (DATA_BUF_SIZE - bufCtrl.appendIdx));
+         if(size>0){
         if (size >= sizeof(PACKET_HEADER_S))
         {
             bufCtrl.appendIdx += size;
@@ -707,6 +709,17 @@ static void *xlgyroReaderThread(void *arg)
                 bufCtrl.processIdx = 0;
             } while (true);
         }
+        }else{
+            printf("[XLGYRODREADER]: Device disconnected!\n");
+            printf("[XLGYRODREADER]: Connect device!\n");
+            close(portFd);
+            do {
+                portFd = open(params.ttyname, O_RDWR | O_NOCTTY);
+            } while (portFd<0);
+            status = serialInterfaceInit(portFd, B115200, 0);
+            printf("Opened: %s\n", params.ttyname);
+        }
+
     }
 }
 
@@ -808,3 +821,4 @@ int XlGyroTestCreate(void *arg)
 {
     return pthread_create(&xlgyroTestTh, NULL, xlgyroTestThread, arg);
 }
+
