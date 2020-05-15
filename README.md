@@ -17,6 +17,7 @@ socat -d -d pty pty
 2. Open new terminal tab and run:
 ./xlgyrod --tty=PTY(output) --test=PTY(input)  
 Input and output can be swapped.
+
 Example: ./xlgyrod --tty=/dev/pts/1 --test=/dev/pts/2
   
   
