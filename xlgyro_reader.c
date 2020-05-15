@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <pthread.h>
 #include <string.h>
+#include<stdlib.h>
 #include <stdio.h>
 #include <termios.h>
 #include <fcntl.h>
@@ -112,6 +113,8 @@ static RAW_SLIDING_WINDOW_S gSlidingWindow = { 0 };
 static AVERAGED_BUF_S aAveragedBuf = { 0 };
 
 static pthread_t xlgyroReaderTh;
+
+static pthread_t xlgyroTestTh;
 
 static READ_BUF_CTRL_S bufCtrl = { 0 };
 
@@ -592,7 +595,8 @@ static void *xlgyroReaderThread(void *arg)
     {
         int err = errno;
         printf("[XLGYRODREADER]: open() failed; error: %s\n", strerror(err));
-        return NULL;
+        printf("[XLGYRODREADER]: Connect device!\n");
+        while ( (portFd = open(params.ttyname, O_RDWR | O_NOCTTY))<0) ;
     }
 
     printf("Opened: %s\n", params.ttyname);
@@ -606,6 +610,7 @@ static void *xlgyroReaderThread(void *arg)
     while (true)
     {
         size = read(portFd, &rawDataBuf[bufCtrl.appendIdx], (DATA_BUF_SIZE - bufCtrl.appendIdx));
+         if(size>0){
         if (size >= sizeof(PACKET_HEADER_S))
         {
             bufCtrl.appendIdx += size;
@@ -704,6 +709,17 @@ static void *xlgyroReaderThread(void *arg)
                 bufCtrl.processIdx = 0;
             } while (true);
         }
+        }else{
+            printf("[XLGYRODREADER]: Device disconnected!\n");
+            printf("[XLGYRODREADER]: Connect device!\n");
+            close(portFd);
+            do {
+                portFd = open(params.ttyname, O_RDWR | O_NOCTTY);
+            } while (portFd<0);
+            status = serialInterfaceInit(portFd, B115200, 0);
+            printf("Opened: %s\n", params.ttyname);
+        }
+
     }
 }
 
@@ -711,3 +727,98 @@ int XlGyroReaderCreate(void *arg)
 {
     return pthread_create(&xlgyroReaderTh, NULL, xlgyroReaderThread, arg);
 }
+
+static void *xlgyroTestThread(void *arg)
+{
+ 
+    int portFd = 0;
+    int status = 0;
+    ssize_t size = 0;
+    int32_t packetStartIdx = 0;
+
+    if (arg != NULL)
+    {
+        memcpy(&params, arg, sizeof(XLGYRO_READER_THREAD_PARAMS_S));
+    }
+
+    portFd = open(params.ttytest, O_RDWR | O_NOCTTY);
+    if (portFd < 0)
+    {
+        int err = errno;
+        printf("[XLGYRODTEST]: open() failed; error: %s\n", strerror(err));
+        return NULL;
+    }
+
+    printf("Opened: %s\n", params.ttytest);
+    
+    status = serialInterfaceInit(portFd, B115200, 0);
+    if (status < 0)
+    {
+        return NULL;
+    }
+
+
+    int  bytes_written  = 0;  	
+    uint8_t txBuf[MAX_SAMPLES*6] = { 0 };
+    DATA_PACKET_S payload[1] = {0};
+    uint32_t payloadLen = 0;
+
+
+    while (1)
+    {
+        //Generate paylode with random amount of aValue,gValue values
+        generate_payload(payload);
+        payloadLen = DATA_PACKET_LEN(payload[0].header.samples);
+        encapsulateAsRaw(txBuf,payload,payloadLen);
+
+        bytes_written = write(portFd, txBuf, sizeof(txBuf));
+
+        //zeor out txBuf and payload before reusing
+        memset(txBuf,0,payloadLen+4);
+        memset(payload,0,payloadLen);
+
+        printf("\n  Payload written to % s",params.ttytest);
+        printf("\n  % d Bytes written to % s", bytes_written,params.ttytest);
+        printf("\n +----------------------------------+\n\n");
+        sleep(1);
+    }
+    close(portFd);/* Close the Serial port */
+   
+}
+
+
+void generate_payload(DATA_PACKET_S *payload)
+{
+    payload[0].header.preambule1 = PACKET_PREAMBULE;
+    payload[0].header.preambule2 = PACKET_PREAMBULE;
+    int agBufLen = rand() % 100;
+    
+    for(uint32_t i = 0; i < agBufLen; i++)
+    {
+        payload[0].agBufs[i].aValue.rawData[E_X_AXIS] = (rand() << 8 | rand());
+        payload[0].agBufs[i].aValue.rawData[E_Y_AXIS] = (rand() << 8 | rand());
+        payload[0].agBufs[i].aValue.rawData[E_Z_AXIS] = (rand() << 8 | rand());
+        payload[0].agBufs[i].gValue.rawData[E_X_AXIS] = (rand() << 8 | rand());
+        payload[0].agBufs[i].gValue.rawData[E_Y_AXIS] = (rand() << 8 | rand());
+        payload[0].agBufs[i].gValue.rawData[E_Z_AXIS] = (rand() << 8 | rand());
+        payload[0].header.samples++;
+    }
+}
+
+void encapsulateAsRaw(uint8_t raw_data[],DATA_PACKET_S *payload, uint32_t payloadLen)
+{
+    if ((payloadLen + 4) <= MAX_SAMPLES*6)   
+    {
+        memcpy(raw_data, (uint8_t*)&payload[0], payloadLen);
+    }
+    raw_data[payloadLen] = 0xA5;
+    raw_data[payloadLen + 1] = 0xA5;
+    raw_data[payloadLen + 2] = 0xA5;
+    raw_data[payloadLen + 3] = 0xA5;
+}
+
+int XlGyroTestCreate(void *arg)
+{
+    return pthread_create(&xlgyroTestTh, NULL, xlgyroTestThread, arg);
+}
+

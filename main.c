@@ -62,6 +62,17 @@ int main(int argc, char *argv[])
         return status;
     }
 
+    if(strncmp("NONE",params.ttytest,strlen("NONE")) != 0)
+    {
+        status = XlGyroTestCreate((void*)&params);
+        if (status < 0)
+        {
+            int err = errno;
+            printf("[XLGYROD]: XlGyroTestCreate() failed; error: %s\n", strerror(err));
+            return status;
+        }
+    }
+
     while (true)
     {
         sleep(1000);

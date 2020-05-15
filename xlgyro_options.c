@@ -12,6 +12,7 @@
 #define Z_AXIS_THD_LO           (double)(-0.4)
 #define DEFAULT_SERVER_PORT     (11333)
 #define DEFAULT_DAEMON          (uint8_t)(0)
+#define DEFAULT_TEST             "NONE"
 
 static struct option long_options[] =
 {
@@ -22,6 +23,7 @@ static struct option long_options[] =
             {"tty",    required_argument, NULL,  0 },
             {"port",   required_argument, NULL,  0 },
             {"daemon", required_argument, NULL,  0 },
+            {"test",   required_argument, NULL,  0 },
             {0,        0,                 0,     0 }
 };
 
@@ -39,6 +41,7 @@ void XlGyroReadOptions(int argc, char *argv[], XLGYRO_READER_THREAD_PARAMS_S *pP
         pParams->zAxisThdLo = Z_AXIS_THD_LO;
         pParams->port = DEFAULT_SERVER_PORT;
         pParams->daemon = DEFAULT_DAEMON;
+        pParams->ttytest = DEFAULT_TEST;
 
         while (true)
         {
@@ -113,6 +116,14 @@ void XlGyroReadOptions(int argc, char *argv[], XLGYRO_READER_THREAD_PARAMS_S *pP
                     }
                     break;
                 }
+                case 7:
+                {
+                    if (optarg != NULL)
+                    {
+                        pParams->ttytest = optarg;
+                    }
+                    break;
+                }
 
                 default:
                 {
@@ -122,13 +133,14 @@ void XlGyroReadOptions(int argc, char *argv[], XLGYRO_READER_THREAD_PARAMS_S *pP
         }
 
         printf("Current settings: \n");
-        printf("ttyname     : %s\n", pParams->ttyname);
+        printf("ttyname     : %s\n",   pParams->ttyname);
         printf("deviationHi : %+lf\n", pParams->deviationHi);
         printf("deviationLo : %+lf\n", pParams->deviationLo);
         printf("zAxisThdHi  : %+lf\n", pParams->zAxisThdHi);
         printf("zAxisThdLo  : %+lf\n", pParams->zAxisThdLo);
-        printf("port        : %d\n", pParams->port);
-        printf("daemon      : %d\n", pParams->daemon);
+        printf("port        : %d\n",   pParams->port);
+        printf("daemon      : %d\n",   pParams->daemon);
+        printf("test        : %s\n",   pParams->ttytest);
         printf("=========================================\n\n");
     }
 }
